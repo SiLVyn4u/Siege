@@ -1,90 +1,147 @@
 extends Control
 
-const MAX_DAY := 8
-const DEFAULT_WINDOW_SIZE := Vector2i(1440, 900)
+const SiegeStateScript := preload("res://scripts/SiegeState.gd")
+const SiegeRules := preload("res://scripts/SiegeRules.gd")
+const SiegeData := preload("res://scripts/SiegeData.gd")
+
+
+# ============================================================
+# 窗口
+# ============================================================
+
+const WINDOW_SIZE := Vector2i(1763, 992)
 const MIN_WINDOW_SIZE := Vector2i(1280, 720)
-const ACTION_FONT_SIZE := 12
-const TITLE_FONT_SIZE := 22
-const ZONE_TITLE_FONT_SIZE := 18
 
-var day := 1
-var game_over := false
-var current_side := "attacker"
 
-var today_weather := "晴朗"
-var tomorrow_weather := "暴雨"
+# ============================================================
+# 字体
+# ============================================================
 
-var attacker_supply := 8
-var attacker_morale := 8
-var attacker_cp := 4
-var attacker_reserve := 0
+const FONT_TITLE := 28
+const FONT_TOP := 22
+const FONT_NORMAL := 20
+const FONT_SMALL := 17
+const FONT_CARD_TITLE := 22
+const FONT_CARD_BODY := 17
+const FONT_BUTTON := 20
+const FONT_ZONE_TITLE := 22
 
-var defender_grain := 6
-var defender_morale := 10
-var defender_cp := 3
-var defender_reserve := 0
 
-var consecutive_passes := 0
+# ============================================================
+# 颜色
+# ============================================================
 
-var pieces := {
-	"left": [],
-	"gate": [],
-	"right": [],
-	"tunnel": [],
-	"attacker_back": [],
-}
+const COLOR_BG := Color("18202a")
+const COLOR_TOP_BAR := Color("263241")
+const COLOR_PANEL := Color("f1e3cf")
+const COLOR_PANEL_2 := Color("ead5bd")
+const COLOR_CARD := Color("fff7e8")
+const COLOR_CARD_SELECTED := Color("ffe08a")
+const COLOR_ZONE := Color("e7d0b6")
+const COLOR_ZONE_HOVER := Color("f0dbc4")
+const COLOR_ZONE_ACTIVE := Color("ffd98e")
+const COLOR_DEFENDER_AREA := Color("cad9e9")
+const COLOR_ATTACKER_AREA := Color("edd1bb")
+const COLOR_HEADER := Color("5c422e")
+const COLOR_HEADER_TEXT := Color("fff4dc")
+const COLOR_BUTTON := Color("d9e5f2")
+const COLOR_BUTTON_HOVER := Color("eaf2fb")
+const COLOR_BUTTON_ACTIVE := Color("ffd879")
+const COLOR_BUTTON_DISABLED := Color("78818d")
+const COLOR_END_BUTTON := Color("e48f6a")
+const COLOR_END_BUTTON_HOVER := Color("eea27f")
+const COLOR_TEXT_DARK := Color("202020")
+const COLOR_TEXT_MUTED := Color("4d4d4d")
+const COLOR_TEXT_LIGHT := Color("f5f1e8")
+const COLOR_BORDER := Color("111820")
+const COLOR_ACCENT := Color("b77d37")
 
-var next_piece_id := 1
 
-var tunnel_progress := 0
+# ============================================================
+# 统一布局参数
+# 以后如果要整体调整 UI，优先改这里。
+# ============================================================
 
-var walls := {
-	"left": {
-		"name": "左墙",
-		"current": 10,
-		"max": 10,
-	},
-	"gate": {
-		"name": "主门",
-		"current": 14,
-		"max": 14,
-	},
-	"right": {
-		"name": "右墙",
-		"current": 10,
-		"max": 10,
-	},
-}
+const LAYOUT_W := 1763.0
+const LAYOUT_H := 992.0
 
-# 修改点 1：
-# 原来只有一个 breakthrough_zone 字符串。
-# 现在每个城墙区域都可以独立拥有突破标记。
-var breakthrough_zones := {
-	"left": false,
-	"gate": false,
-	"right": false,
-}
+const MARGIN := 22.0
+const CONTENT_W := LAYOUT_W - MARGIN * 2.0
 
-var weather_pool := ["晴朗", "暴雨", "大风", "浓雾"]
+const PANEL_PADDING := 10
+const TOP_PANEL_PADDING_X := 20
 
-var root_box: VBoxContainer
-var title_label: Label
-var resource_label: Label
-var zone_box: GridContainer
-var action_box: VBoxContainer
-var log_label: RichTextLabel
+const TOP_X := MARGIN
+const TOP_Y := 18.0
+const TOP_W := CONTENT_W
+const TOP_H := 64.0
+
+const BATTLE_X := MARGIN
+const BATTLE_Y := 104.0
+const BATTLE_H := 380.0
+const BATTLE_COLUMN_GAP := 24.0
+
+const SPECIAL_ZONE_W := 357.0
+const SPECIAL_ZONE_GAP := 14.0
+const SPECIAL_ZONE_H := 117.0
+
+const MAIN_ZONE_TOTAL_W := CONTENT_W - SPECIAL_ZONE_W - BATTLE_COLUMN_GAP
+const MAIN_ZONE_GAP := 18.0
+const MAIN_ZONE_W := 434.0
+
+const MAIN_ZONE_X := BATTLE_X
+const SPECIAL_ZONE_X := BATTLE_X + MAIN_ZONE_TOTAL_W + BATTLE_COLUMN_GAP
+
+const STATUS_X := MARGIN
+const STATUS_Y := 506.0
+const STATUS_W := CONTENT_W
+const STATUS_H := 64.0
+
+const BOTTOM_Y := 588.0
+const BOTTOM_H := 366.0
+const BOTTOM_GAP := 16.0
+
+const LEFT_X := MARGIN
+const LEFT_W := 286.0
+
+const RIGHT_W := 251.0
+const RIGHT_X := MARGIN + CONTENT_W - RIGHT_W
+
+const MID_X := LEFT_X + LEFT_W + BOTTOM_GAP
+const MID_W := RIGHT_X - BOTTOM_GAP - MID_X
+
+
+# ============================================================
+# 节点引用
+# ============================================================
+
+var state: SiegeState
+
+var top_left_label: Label
+var top_right_label: Label
+var own_status_label: Label
+
+var main_zone_box: HBoxContainer
+var special_zone_box: VBoxContainer
+var tab_box: HBoxContainer
+var hand_area_box: VBoxContainer
+var side_action_box: VBoxContainer
+var log_box: RichTextLabel
+var selection_label: Label
+var confirm_dialog: ConfirmationDialog
+
+var selected_base_action := ""
+var selected_card: Dictionary = {}
+var active_tab := "deploy"
+var pending_action: Dictionary = {}
 
 
 func _ready() -> void:
 	setup_window()
-
 	randomize()
-	today_weather = weather_pool.pick_random()
-	tomorrow_weather = weather_pool.pick_random()
-
+	state = SiegeStateScript.new()
 	build_ui()
 	refresh_ui()
-	add_log("第 1 日开始。攻方先行动。")
 
 
 func setup_window() -> void:
@@ -92,859 +149,1067 @@ func setup_window() -> void:
 	Engine.max_fps = 60
 
 	var window := get_window()
-
 	if window == null:
 		return
 
-	window.min_size = Vector2i(960, 600)
-
-	var screen_id := DisplayServer.window_get_current_screen()
-	var usable_rect := DisplayServer.screen_get_usable_rect(screen_id)
-
-	var target_size := Vector2i(
-		min(1280, usable_rect.size.x - 80),
-		min(720, usable_rect.size.y - 80)
-	)
-
-	window.size = target_size
+	window.min_size = MIN_WINDOW_SIZE
+	window.size = WINDOW_SIZE
 	window.move_to_center()
 
 
 func build_ui() -> void:
-	root_box = VBoxContainer.new()
-	root_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root_box.add_theme_constant_override("separation", 6)
-	add_child(root_box)
+	var bg := ColorRect.new()
+	bg.color = COLOR_BG
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
 
-	title_label = Label.new()
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
-	root_box.add_child(title_label)
+	build_top_bar()
+	build_battlefield()
+	build_bottom_area()
+	build_confirm_dialog()
 
-	resource_label = Label.new()
-	resource_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	resource_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	resource_label.add_theme_font_size_override("font_size", 13)
-	root_box.add_child(resource_label)
 
-	var main_box := HBoxContainer.new()
-	main_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	main_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_box.add_theme_constant_override("separation", 8)
-	root_box.add_child(main_box)
+# ============================================================
+# 顶部状态栏
+# ============================================================
 
-	var left_panel := VBoxContainer.new()
-	left_panel.custom_minimum_size = Vector2(690, 0)
-	left_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	left_panel.add_theme_constant_override("separation", 6)
-	main_box.add_child(left_panel)
+func build_top_bar() -> void:
+	var top_panel := PanelContainer.new()
+	set_rect(top_panel, TOP_X, TOP_Y, TOP_W, TOP_H)
+	top_panel.add_theme_stylebox_override("panel", make_style(COLOR_TOP_BAR, Color("35475c"), 2, 12))
+	add_child(top_panel)
 
-	var zone_title := Label.new()
-	zone_title.text = "战区状态"
-	zone_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	zone_title.add_theme_font_size_override("font_size", 16)
-	left_panel.add_child(zone_title)
+	var top_margin := make_margin_container(TOP_PANEL_PADDING_X, 0, TOP_PANEL_PADDING_X, 0)
+	top_panel.add_child(top_margin)
 
-	var zone_scroll := ScrollContainer.new()
-	zone_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	zone_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	left_panel.add_child(zone_scroll)
+	var top_box := HBoxContainer.new()
+	top_box.add_theme_constant_override("separation", 20)
+	top_margin.add_child(top_box)
 
-	zone_box = GridContainer.new()
-	zone_box.columns = 3
-	zone_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	zone_box.add_theme_constant_override("h_separation", 8)
-	zone_box.add_theme_constant_override("v_separation", 8)
-	zone_scroll.add_child(zone_box)
+	top_left_label = Label.new()
+	top_left_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_left_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	top_left_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	top_left_label.add_theme_font_size_override("font_size", FONT_TOP)
+	top_left_label.add_theme_color_override("font_color", COLOR_TEXT_LIGHT)
+	top_box.add_child(top_left_label)
 
-	var right_panel := VBoxContainer.new()
-	right_panel.custom_minimum_size = Vector2(420, 0)
-	right_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right_panel.add_theme_constant_override("separation", 6)
-	main_box.add_child(right_panel)
+	top_right_label = Label.new()
+	top_right_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_right_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	top_right_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	top_right_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	top_right_label.add_theme_font_size_override("font_size", FONT_TOP)
+	top_right_label.add_theme_color_override("font_color", COLOR_TEXT_LIGHT)
+	top_box.add_child(top_right_label)
 
-	var action_title := Label.new()
-	action_title.text = "行动区"
-	action_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	action_title.add_theme_font_size_override("font_size", 16)
-	right_panel.add_child(action_title)
 
-	var action_scroll := ScrollContainer.new()
-	action_scroll.custom_minimum_size = Vector2(0, 360)
-	action_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	action_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right_panel.add_child(action_scroll)
+# ============================================================
+# 中部战场
+# ============================================================
 
-	action_box = VBoxContainer.new()
-	action_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	action_box.add_theme_constant_override("separation", 6)
-	action_scroll.add_child(action_box)
+func build_battlefield() -> void:
+	main_zone_box = HBoxContainer.new()
+	set_rect(main_zone_box, MAIN_ZONE_X, BATTLE_Y, MAIN_ZONE_TOTAL_W, BATTLE_H)
+	main_zone_box.add_theme_constant_override("separation", int(MAIN_ZONE_GAP))
+	add_child(main_zone_box)
+
+	special_zone_box = VBoxContainer.new()
+	set_rect(special_zone_box, SPECIAL_ZONE_X, BATTLE_Y, SPECIAL_ZONE_W, BATTLE_H)
+	special_zone_box.add_theme_constant_override("separation", int(SPECIAL_ZONE_GAP))
+	add_child(special_zone_box)
+
+
+# ============================================================
+# 底部区域
+# ============================================================
+
+func build_bottom_area() -> void:
+	build_own_status_area()
+	build_log_and_tab_area()
+	build_hand_area_panel()
+	build_side_action_area()
+
+
+func build_own_status_area() -> void:
+	var own_status_panel := PanelContainer.new()
+	set_rect(own_status_panel, STATUS_X, STATUS_Y, STATUS_W, STATUS_H)
+	own_status_panel.add_theme_stylebox_override("panel", make_style(COLOR_TOP_BAR, Color("35475c"), 2, 10))
+	add_child(own_status_panel)
+
+	var margin := make_margin_container(18, 0, 18, 0)
+	own_status_panel.add_child(margin)
+
+	own_status_label = Label.new()
+	own_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	own_status_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	own_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	own_status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	own_status_label.add_theme_font_size_override("font_size", FONT_TOP)
+	own_status_label.add_theme_color_override("font_color", COLOR_TEXT_LIGHT)
+	margin.add_child(own_status_label)
+
+
+func build_log_and_tab_area() -> void:
+	var left_panel := PanelContainer.new()
+	set_rect(left_panel, LEFT_X, BOTTOM_Y, LEFT_W, BOTTOM_H)
+	left_panel.add_theme_stylebox_override("panel", make_style(COLOR_PANEL_2, COLOR_BORDER, 2, 10))
+	add_child(left_panel)
+
+	var margin := make_margin_container(PANEL_PADDING)
+	left_panel.add_child(margin)
+
+	var left_box := VBoxContainer.new()
+	left_box.add_theme_constant_override("separation", 10)
+	margin.add_child(left_box)
+
+	tab_box = HBoxContainer.new()
+	tab_box.add_theme_constant_override("separation", 10)
+	left_box.add_child(tab_box)
 
 	var log_title := Label.new()
 	log_title.text = "日志"
 	log_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	log_title.add_theme_font_size_override("font_size", 16)
-	right_panel.add_child(log_title)
+	log_title.add_theme_font_size_override("font_size", FONT_TOP)
+	log_title.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+	left_box.add_child(log_title)
 
-	log_label = RichTextLabel.new()
-	log_label.custom_minimum_size = Vector2(0, 220)
-	log_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	log_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	log_label.bbcode_enabled = true
-	log_label.add_theme_font_size_override("normal_font_size", 12)
-	right_panel.add_child(log_label)
+	log_box = RichTextLabel.new()
+	log_box.custom_minimum_size = Vector2(0, 200)
+	log_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	log_box.bbcode_enabled = true
+	log_box.scroll_active = true
+	log_box.add_theme_font_size_override("normal_font_size", FONT_SMALL)
+	log_box.add_theme_color_override("default_color", COLOR_TEXT_DARK)
+	left_box.add_child(log_box)
 
+
+func build_hand_area_panel() -> void:
+	var hand_panel := PanelContainer.new()
+	set_rect(hand_panel, MID_X, BOTTOM_Y, MID_W, BOTTOM_H)
+	hand_panel.add_theme_stylebox_override("panel", make_style(COLOR_PANEL, COLOR_BORDER, 2, 10))
+	add_child(hand_panel)
+
+	var margin := make_margin_container(PANEL_PADDING)
+	hand_panel.add_child(margin)
+
+	var hand_scroll := ScrollContainer.new()
+	hand_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	hand_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	margin.add_child(hand_scroll)
+
+	hand_area_box = VBoxContainer.new()
+	hand_area_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hand_area_box.add_theme_constant_override("separation", 14)
+	hand_area_box.custom_minimum_size = Vector2(MID_W - PANEL_PADDING * 4, BOTTOM_H - PANEL_PADDING * 4)
+	hand_scroll.add_child(hand_area_box)
+
+
+func build_side_action_area() -> void:
+	var action_panel := PanelContainer.new()
+	set_rect(action_panel, RIGHT_X, BOTTOM_Y, RIGHT_W, BOTTOM_H)
+	action_panel.add_theme_stylebox_override("panel", make_style(COLOR_PANEL_2, COLOR_BORDER, 2, 10))
+	add_child(action_panel)
+
+	var margin := make_margin_container(PANEL_PADDING)
+	action_panel.add_child(margin)
+
+	side_action_box = VBoxContainer.new()
+	side_action_box.add_theme_constant_override("separation", 12)
+	margin.add_child(side_action_box)
+
+
+func build_confirm_dialog() -> void:
+	confirm_dialog = ConfirmationDialog.new()
+	confirm_dialog.title = "确认操作"
+	confirm_dialog.min_size = Vector2i(560, 240)
+	confirm_dialog.confirmed.connect(_on_confirm_dialog_confirmed)
+	add_child(confirm_dialog)
+
+	confirm_dialog.get_ok_button().text = "确认"
+	confirm_dialog.get_cancel_button().text = "取消"
+
+
+# ============================================================
+# 刷新 UI
+# ============================================================
 
 func refresh_ui() -> void:
-	title_label.text = "《围城》规则原型 v0.3｜第 %d 日｜今日：%s｜明日预报：%s" % [
-		day,
-		today_weather,
-		tomorrow_weather
+	top_left_label.text = "第 %d 日｜%s｜%s" % [
+		state.day,
+		state.today_weather,
+		get_phase_text(),
 	]
 
-	var side_name := "攻方阶段" if current_side == "attacker" else "守方阶段"
+	var own_side := state.current_side
+	var enemy_side := "defender" if own_side == "attacker" else "attacker"
 
-	resource_label.text = """
-当前阶段：%s
+	top_right_label.text = "敌方｜%s" % get_side_status_text(enemy_side)
 
-攻方：补给 %d｜士气 %d｜指挥点 %d｜预备点 %d
-守方：粮秣 %d｜士气 %d｜指挥点 %d｜预备点 %d
-
-突破标记：%s
-""" % [
-		side_name,
-		attacker_supply,
-		attacker_morale,
-		attacker_cp,
-		attacker_reserve,
-		defender_grain,
-		defender_morale,
-		defender_cp,
-		defender_reserve,
-		get_breakthrough_text()
-	]
+	if own_status_label != null:
+		own_status_label.text = "我方｜%s" % get_side_status_text(own_side)
 
 	rebuild_zones()
-	rebuild_actions()
+	rebuild_tabs()
+	rebuild_hand_area()
+	rebuild_side_actions()
+	refresh_log()
 
+
+func get_phase_text() -> String:
+	return "攻方阶段" if state.current_side == "attacker" else "守方阶段"
+
+
+func get_side_status_text(side: String) -> String:
+	if side == "attacker":
+		return "攻方：补给 %d｜士气 %d｜指挥点 %d｜预备点 %d" % [
+			state.attacker_supply,
+			state.attacker_morale,
+			state.attacker_cp,
+			state.attacker_reserve,
+		]
+
+	return "守方：粮秣 %d｜士气 %d｜指挥点 %d｜预备点 %d" % [
+		state.defender_grain,
+		state.defender_morale,
+		state.defender_cp,
+		state.defender_reserve,
+	]
+
+
+# ============================================================
+# 战区
+# ============================================================
 
 func rebuild_zones() -> void:
-	for child in zone_box.get_children():
+	for child in main_zone_box.get_children():
 		child.queue_free()
 
-	for zone_id in ["left", "gate", "right"]:
-		var data: Dictionary = walls[zone_id]
+	for zone_id in SiegeData.MAIN_ZONES:
+		main_zone_box.add_child(make_main_zone_button(zone_id))
 
-		var panel := PanelContainer.new()
-		panel.custom_minimum_size = Vector2(210, 140)
-		panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		zone_box.add_child(panel)
+	for child in special_zone_box.get_children():
+		child.queue_free()
 
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 4)
-		panel.add_child(box)
-
-		var name_label := Label.new()
-		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_label.add_theme_font_size_override("font_size", ZONE_TITLE_FONT_SIZE)
-		name_label.text = data["name"]
-		box.add_child(name_label)
-
-		var wall_label := Label.new()
-		wall_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		wall_label.text = "城防：%d / %d" % [
-			int(data["current"]),
-			int(data["max"])
-		]
-		box.add_child(wall_label)
-
-		var state_label := Label.new()
-		state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-		if breakthrough_zones[zone_id]:
-			state_label.text = "状态：已有突破标记！"
-		elif data["current"] <= 0:
-			state_label.text = "状态：破口，可登城"
-		else:
-			state_label.text = "状态：完整"
-
-		box.add_child(state_label)
-
-		var pieces_label := Label.new()
-		pieces_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		pieces_label.add_theme_font_size_override("font_size", 12)
-		pieces_label.text = get_zone_pieces_text(zone_id)
-		box.add_child(pieces_label)
-
-	add_special_zone_panel("tunnel", "地道", "地道进度：%d / 5" % tunnel_progress)
-	add_special_zone_panel("attacker_back", "攻方后阵", "远程器械区")
+	special_zone_box.add_child(make_special_zone_button("tunnel", get_tunnel_title_text(), get_special_zone_body_text("tunnel")))
+	special_zone_box.add_child(make_special_zone_button("shore", "岸防", "暂未开放"))
+	special_zone_box.add_child(make_special_zone_button("attacker_back", "攻方后阵", get_special_zone_body_text("attacker_back")))
 
 
-func add_special_zone_panel(zone_id: String, title: String, extra_text: String) -> void:
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(210, 140)
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	zone_box.add_child(panel)
+func make_main_zone_button(zone_id: String) -> Button:
+	var wall: Dictionary = state.walls[zone_id]
+
+	var button := Button.new()
+	button.text = ""
+	button.custom_minimum_size = Vector2(MAIN_ZONE_W, BATTLE_H)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	button.add_theme_stylebox_override("normal", make_style(get_zone_color(zone_id), COLOR_BORDER, 2, 10))
+	button.add_theme_stylebox_override("hover", make_style(COLOR_ZONE_HOVER, COLOR_ACCENT, 3, 10))
+	button.add_theme_stylebox_override("pressed", make_style(COLOR_ZONE_ACTIVE, COLOR_ACCENT, 3, 10))
+
+	button.pressed.connect(_on_zone_clicked.bind(zone_id))
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 4)
-	panel.add_child(box)
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.offset_left = 8
+	box.offset_top = 8
+	box.offset_right = -8
+	box.offset_bottom = -8
+	box.add_theme_constant_override("separation", 8)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(box)
 
-	var name_label := Label.new()
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", ZONE_TITLE_FONT_SIZE)
-	name_label.text = title
-	box.add_child(name_label)
+	var header_panel := PanelContainer.new()
+	header_panel.custom_minimum_size = Vector2(0, 48)
+	header_panel.add_theme_stylebox_override("panel", make_style(COLOR_HEADER, COLOR_BORDER, 1, 8))
+	header_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(header_panel)
 
-	var info_label := Label.new()
-	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	info_label.text = extra_text
-	box.add_child(info_label)
+	var header := Label.new()
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", FONT_ZONE_TITLE)
+	header.add_theme_color_override("font_color", COLOR_HEADER_TEXT)
+	header.text = "%s  %d/%d%s" % [
+		wall["name"],
+		int(wall["current"]),
+		int(wall["max"]),
+		get_zone_state_suffix(zone_id),
+	]
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_panel.add_child(header)
 
-	var pieces_label := Label.new()
-	pieces_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	pieces_label.add_theme_font_size_override("font_size", 12)
-	pieces_label.text = get_zone_pieces_text(zone_id)
-	box.add_child(pieces_label)
+	box.add_child(make_side_piece_panel(zone_id, "defender", "守方", COLOR_DEFENDER_AREA))
+	box.add_child(make_side_piece_panel(zone_id, "attacker", "攻方", COLOR_ATTACKER_AREA))
 
-
-func get_zone_pieces_text(zone_id: String) -> String:
-	var list: Array = pieces[zone_id]
-
-	if list.is_empty():
-		return "部署物：无"
-
-	var text := "部署物：\n"
-
-	for piece in list:
-		var side_name := "攻" if piece["side"] == "attacker" else "守"
-		text += "%s｜%s HP %d/%d 战%d 工%d\n" % [
-			side_name,
-			piece["name"],
-			piece["hp"],
-			piece["max_hp"],
-			piece["battle"],
-			piece["engineering"],
-		]
-
-	return text
-
-
-func rebuild_actions() -> void:
-	for child in action_box.get_children():
-		child.queue_free()
-
-	var hint := Label.new()
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 14)
-
-	if game_over:
-		hint.text = "游戏结束。"
-	else:
-		hint.text = "选择行动："
-
-	action_box.add_child(hint)
-
-	if game_over:
-		return
-
-	if current_side == "attacker":
-		add_attacker_actions()
-	else:
-		add_defender_actions()
-
-	add_section_title("通用行动")
-
-	var common_grid := make_action_grid(2)
-
-	var reserve_button := make_action_button("待机：转 1 点预备")
-	reserve_button.disabled = attacker_cp <= 0 if current_side == "attacker" else defender_cp <= 0
-	reserve_button.pressed.connect(pass_action)
-	common_grid.add_child(reserve_button)
-
-	var phase_button := make_action_button("")
-
-	if current_side == "attacker":
-		phase_button.text = "结束攻方阶段"
-		phase_button.pressed.connect(end_attacker_phase)
-	else:
-		phase_button.text = "结束本日"
-		phase_button.pressed.connect(end_day)
-
-	common_grid.add_child(phase_button)
-
-
-func add_section_title(text: String) -> void:
-	var title := Label.new()
-	title.text = text
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 13)
-	action_box.add_child(title)
-
-
-func make_action_grid(columns: int = 2) -> GridContainer:
-	var grid := GridContainer.new()
-	grid.columns = columns
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 4)
-	grid.add_theme_constant_override("v_separation", 4)
-	action_box.add_child(grid)
-	return grid
-
-
-func make_action_button(text: String, disabled: bool = false) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.disabled = disabled
-	button.custom_minimum_size = Vector2(118, 30)
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	button.add_theme_font_size_override("font_size", ACTION_FONT_SIZE)
 	return button
 
 
-func add_attacker_actions() -> void:
-	add_section_title("攻方攻击")
+func make_side_piece_panel(zone_id: String, side: String, title: String, color: Color) -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_theme_stylebox_override("panel", make_style(color, Color("7e6a59"), 1, 8))
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var attack_grid := make_action_grid(3)
+	var label := Label.new()
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_font_size_override("font_size", FONT_SMALL)
+	label.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+	label.text = title + "：\n" + get_zone_side_pieces_text(zone_id, side)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(label)
 
-	for zone_id in ["left", "gate", "right"]:
-		var z: String = String(zone_id)
+	return panel
 
-		var button := make_action_button(
-			"强攻%s｜1 指挥" % walls[z]["name"],
-			attacker_cp < 1
-		)
-		button.pressed.connect(attacker_assault.bind(z))
-		attack_grid.add_child(button)
 
-	for zone_id in ["left", "gate", "right"]:
-		var z: String = String(zone_id)
+func make_special_zone_button(zone_id: String, title: String, subtext: String) -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(SPECIAL_ZONE_W, SPECIAL_ZONE_H)
+	button.text = "%s\n%s" % [title, subtext]
 
-		var button := make_action_button(
-			"登城%s｜2 指挥" % walls[z]["name"],
-			attacker_cp < 2 or walls[z]["current"] > 0 or breakthrough_zones[z]
-		)
-		button.pressed.connect(attacker_climb.bind(z))
-		attack_grid.add_child(button)
+	button.add_theme_font_size_override("font_size", FONT_BUTTON)
+	button.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_hover_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_pressed_color", COLOR_TEXT_DARK)
 
-	add_section_title("攻方部署：兵力")
+	button.add_theme_stylebox_override("normal", make_style(Color("e6d1b7"), COLOR_BORDER, 2, 10))
+	button.add_theme_stylebox_override("hover", make_style(Color("f0dec6"), COLOR_ACCENT, 3, 10))
+	button.add_theme_stylebox_override("pressed", make_style(Color("ffd98e"), COLOR_ACCENT, 3, 10))
 
-	var deploy_grid1 := make_action_grid(3)
+	button.pressed.connect(_on_zone_clicked.bind(zone_id))
 
-	for zone_id in ["left", "gate", "right"]:
-		var z: String = String(zone_id)
+	return button
 
-		var infantry_button := make_action_button(
-			"步兵到%s｜1 指挥" % walls[z]["name"],
-			attacker_cp < 1
-		)
-		infantry_button.pressed.connect(deploy_piece.bind(z, "attacker", "attacker_infantry", 1, 0, 0))
-		deploy_grid1.add_child(infantry_button)
 
-	add_section_title("攻方部署：工程")
+func get_zone_color(zone_id: String) -> Color:
+	if selected_base_action != "" and is_main_zone(zone_id):
+		return Color("edd7b8")
 
-	var deploy_grid2 := make_action_grid(2)
+	if not selected_card.is_empty() and is_zone_valid_for_selected_card(zone_id):
+		return Color("edd7b8")
 
-	var engineer_gate_button := make_action_button("工兵到主门｜1 指挥", attacker_cp < 1)
-	engineer_gate_button.pressed.connect(deploy_piece.bind("gate", "attacker", "attacker_engineer", 1, 0, 0))
-	deploy_grid2.add_child(engineer_gate_button)
+	return COLOR_ZONE
 
-	var engineer_tunnel_button := make_action_button("工兵到地道｜1 指挥", attacker_cp < 1)
-	engineer_tunnel_button.pressed.connect(deploy_piece.bind("tunnel", "attacker", "attacker_engineer", 1, 0, 0))
-	deploy_grid2.add_child(engineer_tunnel_button)
 
-	var ladder_left_button := make_action_button("云梯到左墙｜1 指挥", attacker_cp < 1)
-	ladder_left_button.pressed.connect(deploy_piece.bind("left", "attacker", "ladder", 1, 0, 0))
-	deploy_grid2.add_child(ladder_left_button)
+func get_zone_state_suffix(zone_id: String) -> String:
+	if bool(state.breakthrough_zones[zone_id]):
+		return "｜突破"
 
-	var ladder_right_button := make_action_button("云梯到右墙｜1 指挥", attacker_cp < 1)
-	ladder_right_button.pressed.connect(deploy_piece.bind("right", "attacker", "ladder", 1, 0, 0))
-	deploy_grid2.add_child(ladder_right_button)
+	if int(state.walls[zone_id]["current"]) <= 0:
+		return "｜破口"
 
-	add_section_title("攻方部署：器械")
+	return ""
 
-	var deploy_grid3 := make_action_grid(2)
 
-	var ram_button := make_action_button("冲车到主门｜2 指挥 +1 补给", attacker_cp < 2 or attacker_supply < 1)
-	ram_button.pressed.connect(deploy_piece.bind("gate", "attacker", "ram", 2, 1, 0))
-	deploy_grid3.add_child(ram_button)
-
-	var cannon_button := make_action_button("炮队到后阵｜2 指挥 +1 补给", attacker_cp < 2 or attacker_supply < 1)
-	cannon_button.pressed.connect(deploy_piece.bind("attacker_back", "attacker", "cannon", 2, 1, 0))
-	deploy_grid3.add_child(cannon_button)
-
-
-func add_defender_actions() -> void:
-	add_section_title("守方应对")
-
-	var action_grid := make_action_grid(3)
-
-	for zone_id in ["left", "gate", "right"]:
-		var z: String = String(zone_id)
-
-		var button := make_action_button(
-			"修补%s｜1 指挥" % walls[z]["name"],
-			defender_cp < 1 or walls[z]["current"] >= walls[z]["max"]
-		)
-		button.pressed.connect(defender_repair.bind(z))
-		action_grid.add_child(button)
-
-	for zone_id in ["left", "gate", "right"]:
-		var z: String = String(zone_id)
-
-		var button := make_action_button(
-			"反击%s｜1 指挥/预备" % walls[z]["name"],
-			not breakthrough_zones[z] or (defender_cp < 1 and defender_reserve < 1)
-		)
-		button.pressed.connect(defender_counterattack.bind(z))
-		action_grid.add_child(button)
-
-	add_section_title("守方部署：守军")
-
-	var deploy_grid1 := make_action_grid(3)
-
-	for zone_id in ["left", "gate", "right"]:
-		var z: String = String(zone_id)
-
-		var guard_button := make_action_button(
-			"守军到%s｜1 指挥" % walls[z]["name"],
-			defender_cp < 1
-		)
-		guard_button.pressed.connect(deploy_piece.bind(z, "defender", "defender_guard", 1, 0, 0))
-		deploy_grid1.add_child(guard_button)
-
-	add_section_title("守方部署：工匠")
-
-	var deploy_grid2 := make_action_grid(2)
-
-	for zone_id in ["left", "gate", "right"]:
-		var z: String = String(zone_id)
-
-		var worker_button := make_action_button(
-			"工匠到%s｜1 指挥" % walls[z]["name"],
-			defender_cp < 1
-		)
-		worker_button.pressed.connect(deploy_piece.bind(z, "defender", "defender_worker", 1, 0, 0))
-		deploy_grid2.add_child(worker_button)
-
-	var worker_tunnel_button := make_action_button("工匠到地道｜1 指挥", defender_cp < 1)
-	worker_tunnel_button.pressed.connect(deploy_piece.bind("tunnel", "defender", "defender_worker", 1, 0, 0))
-	deploy_grid2.add_child(worker_tunnel_button)
-
-	add_section_title("守方部署：防御器械")
-
-	var deploy_grid3 := make_action_grid(2)
-
-	var archer_left_button := make_action_button("弓手到左墙｜1 指挥", defender_cp < 1)
-	archer_left_button.pressed.connect(deploy_piece.bind("left", "defender", "tower_archer", 1, 0, 0))
-	deploy_grid3.add_child(archer_left_button)
-
-	var archer_right_button := make_action_button("弓手到右墙｜1 指挥", defender_cp < 1)
-	archer_right_button.pressed.connect(deploy_piece.bind("right", "defender", "tower_archer", 1, 0, 0))
-	deploy_grid3.add_child(archer_right_button)
-
-	var logs_left_button := make_action_button("滚木到左墙｜1 指挥", defender_cp < 1)
-	logs_left_button.pressed.connect(deploy_piece.bind("left", "defender", "rolling_logs", 1, 0, 0))
-	deploy_grid3.add_child(logs_left_button)
-
-	var logs_gate_button := make_action_button("滚木到主门｜1 指挥", defender_cp < 1)
-	logs_gate_button.pressed.connect(deploy_piece.bind("gate", "defender", "rolling_logs", 1, 0, 0))
-	deploy_grid3.add_child(logs_gate_button)
-
-	var logs_right_button := make_action_button("滚木到右墙｜1 指挥", defender_cp < 1)
-	logs_right_button.pressed.connect(deploy_piece.bind("right", "defender", "rolling_logs", 1, 0, 0))
-	deploy_grid3.add_child(logs_right_button)
-
-
-func attacker_assault(zone_id: String) -> void:
-	if game_over or current_side != "attacker":
-		return
-
-	if attacker_cp < 1:
-		add_log("攻方指挥点不足。")
-		return
-
-	attacker_cp -= 1
-
-	var damage := 2
-
-	if today_weather == "暴雨":
-		damage = max(1, damage - 1)
-
-	walls[zone_id]["current"] = max(0, walls[zone_id]["current"] - damage)
-
-	add_log("攻方强攻%s，造成 %d 点普通破坏。" % [
-		walls[zone_id]["name"],
-		damage
-	])
-
-	refresh_ui()
-
-
-func attacker_climb(zone_id: String) -> void:
-	if game_over or current_side != "attacker":
-		return
-
-	if attacker_cp < 2:
-		add_log("攻方指挥点不足，无法登城。")
-		return
-
-	if walls[zone_id]["current"] > 0:
-		add_log("%s尚未破口，不能登城。" % walls[zone_id]["name"])
-		return
-
-	if breakthrough_zones[zone_id]:
-		add_log("%s已经有突破标记。" % walls[zone_id]["name"])
-		return
-
-	attacker_cp -= 2
-	breakthrough_zones[zone_id] = true
-
-	add_log("攻方在%s登城，放置突破标记！守方将在守方阶段尝试清除。" % walls[zone_id]["name"])
-
-	refresh_ui()
-
-
-func defender_repair(zone_id: String) -> void:
-	if game_over or current_side != "defender":
-		return
-
-	if defender_cp < 1:
-		add_log("守方指挥点不足。")
-		return
-
-	defender_cp -= 1
-
-	var repair_amount := 2
-	walls[zone_id]["current"] = min(
-		walls[zone_id]["max"],
-		walls[zone_id]["current"] + repair_amount
-	)
-
-	add_log("守方修补%s，恢复 %d 点当前城防。" % [
-		walls[zone_id]["name"],
-		repair_amount
-	])
-
-	refresh_ui()
-
-
-func defender_counterattack(zone_id: String) -> void:
-	if game_over or current_side != "defender":
-		return
-
-	if not breakthrough_zones[zone_id]:
-		add_log("该战区没有突破标记。")
-		return
-
-	if defender_cp >= 1:
-		defender_cp -= 1
-	elif defender_reserve >= 1:
-		defender_reserve -= 1
-	else:
-		add_log("守方没有指挥点或预备点，无法反击。")
-		return
-
-	breakthrough_zones[zone_id] = false
-
-	add_log("守方在%s反击成功，移除了突破标记。" % walls[zone_id]["name"])
-
-	refresh_ui()
-
-
-func pass_action() -> void:
-	if game_over:
-		return
-
-	if current_side == "attacker":
-		if attacker_cp > 0:
-			attacker_cp -= 1
-			attacker_reserve += 1
-			add_log("攻方待机，将 1 点指挥点转为预备点。")
-		else:
-			add_log("攻方已经没有指挥点。")
-	else:
-		if defender_cp > 0:
-			defender_cp -= 1
-			defender_reserve += 1
-			add_log("守方待机，将 1 点指挥点转为预备点。")
-		else:
-			add_log("守方已经没有指挥点。")
-
-	refresh_ui()
-
-
-func both_sides_out_of_cp() -> bool:
-	return attacker_cp <= 0 and defender_cp <= 0
-
-
-func switch_side() -> void:
-	if current_side == "attacker":
-		current_side = "defender"
-	else:
-		current_side = "attacker"
-
-
-func end_day() -> void:
-	if game_over:
-		return
-
-	add_log("第 %d 日进入结算。" % day)
-
-	if has_any_breakthrough():
-		game_over = true
-		add_log("[color=red]攻方胜利！以下突破标记未被清除：%s。城池陷落。[/color]" % get_breakthrough_text())
-		refresh_ui()
-		return
-
-	consume_long_term_resources()
-
-	if attacker_morale <= 0:
-		game_over = true
-		add_log("[color=blue]守方胜利！攻方士气崩溃。[/color]")
-		refresh_ui()
-		return
-
-	if defender_morale <= 0:
-		game_over = true
-		add_log("[color=red]攻方胜利！守方士气崩溃。[/color]")
-		refresh_ui()
-		return
-
-	if day >= MAX_DAY:
-		game_over = true
-		add_log("[color=blue]守方胜利！援军抵达，城池守住。[/color]")
-		refresh_ui()
-		return
-
-	day += 1
-	begin_next_day()
-
-
-func end_attacker_phase() -> void:
-	if game_over:
-		return
-
-	if current_side != "attacker":
-		return
-
-	current_side = "defender"
-	consecutive_passes = 0
-
-	add_log("攻方阶段结束。守方开始应对攻势。")
-	refresh_ui()
-
-
-func consume_long_term_resources() -> void:
-	if attacker_supply > 0:
-		attacker_supply -= 1
-		add_log("攻方消耗 1 补给。")
-	else:
-		attacker_morale -= 1
-		add_log("攻方补给耗尽，士气 -1。")
-
-	if defender_grain > 0:
-		defender_grain -= 1
-		add_log("守方消耗 1 粮秣。")
-	else:
-		defender_morale -= 1
-		add_log("守方粮秣耗尽，士气 -1。")
-
-
-func begin_next_day() -> void:
-	today_weather = tomorrow_weather
-	tomorrow_weather = weather_pool.pick_random()
-
-	attacker_cp = 4
-	defender_cp = 3
-	attacker_reserve = 0
-	defender_reserve = 0
-	consecutive_passes = 0
-	current_side = "attacker"
-
-	add_log("第 %d 日开始。今日天气：%s。攻方阶段开始。" % [day, today_weather])
-	refresh_ui()
-
-
-func has_any_breakthrough() -> bool:
-	for zone_id in ["left", "gate", "right"]:
-		if breakthrough_zones[zone_id]:
-			return true
-
-	return false
-
-
-func get_breakthrough_text() -> String:
-	var names := PackedStringArray()
-
-	for zone_id in ["left", "gate", "right"]:
-		if breakthrough_zones[zone_id]:
-			names.append(String(walls[zone_id]["name"]))
-
-	if names.is_empty():
+func get_zone_side_pieces_text(zone_id: String, side: String) -> String:
+	if not state.pieces.has(zone_id):
 		return "无"
+
+	var parts: Array[String] = []
+
+	for piece in state.pieces[zone_id]:
+		if String(piece["side"]) != side:
+			continue
+
+		parts.append("%s  HP%d/%d  战%d 工%d" % [
+			piece["name"],
+			int(piece["hp"]),
+			int(piece["max_hp"]),
+			int(piece["battle"]),
+			int(piece["engineering"]),
+		])
+
+	if parts.is_empty():
+		return "无"
+
+	return "\n".join(parts)
+
+
+func get_zone_piece_count_text(zone_id: String) -> String:
+	if not state.pieces.has(zone_id) or state.pieces[zone_id].is_empty():
+		return "无部署物"
+
+	return "%d 个部署物" % state.pieces[zone_id].size()
+
+
+func get_tunnel_title_text() -> String:
+	if state.current_side == "defender":
+		return "地道（进度？/5）"
+
+	return "地道（进度%d/5）" % state.tunnel_progress
+
+
+func get_special_zone_body_text(zone_id: String) -> String:
+	if zone_id == "shore":
+		return "暂未开放"
+
+	if not state.pieces.has(zone_id) or state.pieces[zone_id].is_empty():
+		return "无部署物"
+
+	var parts: Array[String] = []
+
+	for piece in state.pieces[zone_id]:
+		var side_name := "攻" if String(piece["side"]) == "attacker" else "守"
+
+		parts.append("%s｜%s HP%d/%d 战%d 工%d" % [
+			side_name,
+			piece["name"],
+			int(piece["hp"]),
+			int(piece["max_hp"]),
+			int(piece["battle"]),
+			int(piece["engineering"]),
+		])
+
+	return "\n".join(parts)
+
+
+# ============================================================
+# 标签页与手牌区
+# ============================================================
+
+func rebuild_tabs() -> void:
+	for child in tab_box.get_children():
+		child.queue_free()
+
+	tab_box.add_child(make_tab_button("部署", "deploy"))
+	tab_box.add_child(make_tab_button("命令", "command"))
+
+
+func make_tab_button(text: String, tab_id: String) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = Vector2(120, 64)
+
+	button.add_theme_font_size_override("font_size", FONT_BUTTON)
+	button.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_hover_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_pressed_color", COLOR_TEXT_DARK)
+
+	var color := COLOR_BUTTON_ACTIVE if active_tab == tab_id else Color("efe1cb")
+
+	button.add_theme_stylebox_override("normal", make_style(color, COLOR_BORDER, 1, 8))
+	button.add_theme_stylebox_override("hover", make_style(Color("fff0cf"), COLOR_ACCENT, 2, 8))
+
+	button.pressed.connect(_on_tab_pressed.bind(tab_id))
+
+	return button
+
+
+func _on_tab_pressed(tab_id: String) -> void:
+	active_tab = tab_id
+	selected_base_action = ""
+	selected_card.clear()
+	pending_action.clear()
+	refresh_ui()
+
+
+func rebuild_hand_area() -> void:
+	for child in hand_area_box.get_children():
+		child.queue_free()
+
+	if active_tab == "deploy":
+		build_deploy_area()
+	else:
+		build_command_area()
+
+
+func build_deploy_area() -> void:
+	add_hand_title("部署牌｜选择卡牌，再点击可部署区域")
+
+	selection_label = make_selection_label()
+	hand_area_box.add_child(selection_label)
+
+	var grid := make_card_grid(5)
+
+	for card in get_deploy_cards_for_current_side():
+		grid.add_child(make_deploy_card_button(card))
+
+
+func build_command_area() -> void:
+	add_hand_title("命令牌｜当前为占位卡牌，后续接入真实效果")
+
+	selection_label = make_selection_label()
+	hand_area_box.add_child(selection_label)
+
+	var grid := make_card_grid(5)
+
+	for card in get_command_cards_for_current_side():
+		grid.add_child(make_command_card_button(card))
+
+
+func add_hand_title(text: String) -> void:
+	var title := Label.new()
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", FONT_TOP)
+	title.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+	title.text = text
+	hand_area_box.add_child(title)
+
+
+func make_selection_label() -> Label:
+	var label := Label.new()
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_font_size_override("font_size", FONT_NORMAL)
+	label.add_theme_color_override("font_color", Color("5b3b1f"))
+
+	if selected_base_action != "":
+		label.text = "已选择基础行动：%s。请点击战区，然后确认。" % get_selected_action_text()
+	elif not selected_card.is_empty():
+		label.text = "已选择卡牌：%s。可放置区域：%s。" % [
+			selected_card["name"],
+			get_card_zone_names(selected_card),
+		]
+	else:
+		label.text = "未选择。"
+
+	return label
+
+
+func make_card_grid(columns: int) -> GridContainer:
+	var grid := GridContainer.new()
+	grid.columns = columns
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 16)
+	hand_area_box.add_child(grid)
+
+	return grid
+
+
+func make_deploy_card_button(card: Dictionary) -> Button:
+	var disabled := not can_pay_card(card)
+	var selected := is_selected_card(card)
+
+	var button := make_card_button(card, disabled, selected)
+	button.pressed.connect(_on_deploy_card_pressed.bind(card.duplicate(true)))
+
+	return button
+
+
+func make_command_card_button(card: Dictionary) -> Button:
+	var button := make_card_button(card, true, false)
+	button.tooltip_text = "命令牌系统还未接入。"
+	return button
+
+
+func make_card_button(card: Dictionary, disabled: bool, selected: bool) -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(205, 178)
+	button.disabled = disabled
+
+	button.text = "%s\n\n费用：%s\n%s\n\n%s" % [
+		card.get("name", "未知"),
+		get_cost_text(card),
+		card.get("type_text", "部署"),
+		card.get("desc", ""),
+	]
+
+	button.add_theme_font_size_override("font_size", FONT_CARD_BODY)
+	button.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_hover_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_pressed_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_disabled_color", Color("545454"))
+
+	var bg := COLOR_CARD_SELECTED if selected else COLOR_CARD
+
+	button.add_theme_stylebox_override("normal", make_style(bg, COLOR_BORDER, 2, 12))
+	button.add_theme_stylebox_override("hover", make_style(Color("fff0c2"), COLOR_ACCENT, 3, 12))
+	button.add_theme_stylebox_override("pressed", make_style(Color("ffd879"), COLOR_ACCENT, 3, 12))
+	button.add_theme_stylebox_override("disabled", make_style(Color("c7c0b5"), Color("6a635b"), 1, 12))
+
+	return button
+
+
+func get_deploy_cards_for_current_side() -> Array[Dictionary]:
+	if state.current_side == "attacker":
+		return [
+			make_card("步兵队", "attacker", "attacker_infantry", 1, 0, 0, ["left", "gate", "right"], "部署攻方步兵。\n战2｜工0｜耐2"),
+			make_card("工兵", "attacker", "attacker_engineer", 1, 0, 0, ["gate", "tunnel"], "主门作业或挖地道。\n战1｜工2｜耐1"),
+			make_card("云梯", "attacker", "ladder", 1, 0, 0, ["left", "right"], "所在战区登城费用 -1。"),
+			make_card("冲车", "attacker", "ram", 2, 1, 0, ["gate"], "主门攻城器械。\n部署额外消耗补给。"),
+			make_card("炮队", "attacker", "cannon", 2, 1, 0, ["attacker_back"], "远程攻城器械。\n部署到攻方后阵。"),
+		]
+
+	return [
+		make_card("守军", "defender", "defender_guard", 1, 0, 0, ["left", "gate", "right"], "部署守方战斗单位。\n战2｜工0｜耐2"),
+		make_card("工匠", "defender", "defender_worker", 1, 0, 0, ["left", "gate", "right", "tunnel"], "修补城防或封堵地道。\n战0｜工2｜耐1"),
+		make_card("塔楼弓手", "defender", "tower_archer", 1, 0, 0, ["left", "right"], "部署在墙段。\n可射击同战区目标。"),
+		make_card("滚木擂石", "defender", "rolling_logs", 1, 0, 0, ["left", "gate", "right"], "登城时触发的防御器械。"),
+	]
+
+
+func get_command_cards_for_current_side() -> Array[Dictionary]:
+	if state.current_side == "attacker":
+		return [
+			make_command_placeholder("集中强攻", "选择有攻方单位的主战区，造成普通破坏。"),
+			make_command_placeholder("掘进", "如果地道有工兵，推进地道。"),
+			make_command_placeholder("炮火校准", "强化下一次炮击。"),
+			make_command_placeholder("护卫器械", "减少下一次器械受到的伤害。"),
+			make_command_placeholder("声东击西", "移动守方单位，制造空档。"),
+		]
+
+	return [
+		make_command_placeholder("修补城防", "有工匠时高效修补城防。"),
+		make_command_placeholder("封堵地道", "有工匠时降低地道进度。"),
+		make_command_placeholder("齐射", "对同战区攻方单位造成伤害。"),
+		make_command_placeholder("预备队", "在破口处部署守军并清除突破。"),
+		make_command_placeholder("坚壁清野", "牺牲守方士气，削弱攻方补给。"),
+	]
+
+
+func make_card(
+	name: String,
+	side: String,
+	kind: String,
+	cp_cost: int,
+	supply_cost: int,
+	grain_cost: int,
+	zones: Array,
+	desc: String
+) -> Dictionary:
+	return {
+		"name": name,
+		"type": "deploy",
+		"type_text": "部署牌",
+		"side": side,
+		"kind": kind,
+		"cp_cost": cp_cost,
+		"supply_cost": supply_cost,
+		"grain_cost": grain_cost,
+		"zones": zones,
+		"desc": desc,
+	}
+
+
+func make_command_placeholder(name: String, desc: String) -> Dictionary:
+	return {
+		"name": name,
+		"type": "command",
+		"type_text": "命令牌｜未接入",
+		"cp_cost": 1,
+		"supply_cost": 0,
+		"grain_cost": 0,
+		"zones": [],
+		"desc": desc,
+	}
+
+
+func can_pay_card(card: Dictionary) -> bool:
+	if state.game_over:
+		return false
+
+	if String(card["side"]) == "attacker":
+		return state.current_side == "attacker" \
+			and state.attacker_cp >= int(card["cp_cost"]) \
+			and state.attacker_supply >= int(card["supply_cost"])
+
+	return state.current_side == "defender" \
+		and state.defender_cp >= int(card["cp_cost"]) \
+		and state.defender_grain >= int(card["grain_cost"])
+
+
+func get_cost_text(card: Dictionary) -> String:
+	var parts: Array[String] = []
+
+	var cp_cost := int(card.get("cp_cost", 0))
+	var supply_cost := int(card.get("supply_cost", 0))
+	var grain_cost := int(card.get("grain_cost", 0))
+
+	if cp_cost > 0:
+		parts.append("%d 指挥" % cp_cost)
+
+	if supply_cost > 0:
+		parts.append("%d 补给" % supply_cost)
+
+	if grain_cost > 0:
+		parts.append("%d 粮秣" % grain_cost)
+
+	if parts.is_empty():
+		return "0"
+
+	return " + ".join(parts)
+
+
+func _on_deploy_card_pressed(card: Dictionary) -> void:
+	selected_base_action = ""
+	selected_card = card
+	pending_action.clear()
+	refresh_ui()
+
+
+func is_selected_card(card: Dictionary) -> bool:
+	if selected_card.is_empty():
+		return false
+
+	return String(selected_card.get("name", "")) == String(card.get("name", "")) \
+		and String(selected_card.get("side", "")) == String(card.get("side", ""))
+
+
+func is_zone_valid_for_selected_card(zone_id: String) -> bool:
+	if selected_card.is_empty():
+		return false
+
+	var zones: Array = selected_card.get("zones", [])
+	return zones.has(zone_id)
+
+
+func get_card_zone_names(card: Dictionary) -> String:
+	var zones: Array = card.get("zones", [])
+	var names: Array[String] = []
+
+	for zone_id in zones:
+		if String(zone_id) == "shore":
+			names.append("岸防")
+		else:
+			names.append(SiegeData.get_zone_name(String(zone_id)))
 
 	return "、".join(names)
 
 
-func create_piece(side: String, kind: String) -> Dictionary:
-	var piece := {
-		"id": next_piece_id,
-		"side": side,
-		"kind": kind,
-		"name": "",
-		"battle": 0,
-		"engineering": 0,
-		"hp": 1,
-		"max_hp": 1,
-		"is_equipment": false,
-	}
+# ============================================================
+# 右侧基础行动
+# ============================================================
 
-	next_piece_id += 1
+func rebuild_side_actions() -> void:
+	for child in side_action_box.get_children():
+		child.queue_free()
 
-	match kind:
-		"attacker_infantry":
-			piece["name"] = "步兵队"
-			piece["battle"] = 2
-			piece["engineering"] = 0
-			piece["hp"] = 2
-			piece["max_hp"] = 2
+	var title := Label.new()
+	title.text = "基础行动"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", FONT_TOP)
+	title.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+	side_action_box.add_child(title)
 
-		"attacker_engineer":
-			piece["name"] = "工兵"
-			piece["battle"] = 1
-			piece["engineering"] = 2
-			piece["hp"] = 1
-			piece["max_hp"] = 1
-
-		"ladder":
-			piece["name"] = "云梯"
-			piece["battle"] = 0
-			piece["engineering"] = 0
-			piece["hp"] = 2
-			piece["max_hp"] = 2
-			piece["is_equipment"] = true
-
-		"ram":
-			piece["name"] = "冲车"
-			piece["battle"] = 0
-			piece["engineering"] = 3
-			piece["hp"] = 3
-			piece["max_hp"] = 3
-			piece["is_equipment"] = true
-
-		"cannon":
-			piece["name"] = "炮队"
-			piece["battle"] = 0
-			piece["engineering"] = 2
-			piece["hp"] = 2
-			piece["max_hp"] = 2
-			piece["is_equipment"] = true
-
-		"defender_guard":
-			piece["name"] = "守军"
-			piece["battle"] = 2
-			piece["engineering"] = 0
-			piece["hp"] = 2
-			piece["max_hp"] = 2
-
-		"defender_worker":
-			piece["name"] = "工匠"
-			piece["battle"] = 0
-			piece["engineering"] = 2
-			piece["hp"] = 1
-			piece["max_hp"] = 1
-
-		"tower_archer":
-			piece["name"] = "塔楼弓手"
-			piece["battle"] = 1
-			piece["engineering"] = 0
-			piece["hp"] = 2
-			piece["max_hp"] = 2
-			piece["is_equipment"] = true
-
-		"rolling_logs":
-			piece["name"] = "滚木擂石"
-			piece["battle"] = 0
-			piece["engineering"] = 0
-			piece["hp"] = 1
-			piece["max_hp"] = 1
-			piece["is_equipment"] = true
-
-	return piece
-
-
-func deploy_piece(
-	zone_id: String,
-	side: String,
-	kind: String,
-	cp_cost: int,
-	supply_cost: int = 0,
-	grain_cost: int = 0
-) -> void:
-	if game_over:
+	if state.game_over:
+		var label := Label.new()
+		label.text = "游戏结束"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", FONT_BUTTON)
+		label.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+		side_action_box.add_child(label)
 		return
 
-	if side == "attacker":
-		if current_side != "attacker":
-			return
-
-		if attacker_cp < cp_cost:
-			add_log("攻方指挥点不足，无法部署。")
-			return
-
-		if attacker_supply < supply_cost:
-			add_log("攻方补给不足，无法部署。")
-			return
-
-		attacker_cp -= cp_cost
-		attacker_supply -= supply_cost
-
+	if state.current_side == "attacker":
+		side_action_box.add_child(make_mode_button("强攻", "assault", state.attacker_cp < 1))
+		side_action_box.add_child(make_mode_button("登城", "climb", state.attacker_cp < 1))
+		side_action_box.add_child(make_reserve_button())
+		side_action_box.add_child(make_end_button("结束攻方阶段"))
 	else:
-		if current_side != "defender":
-			return
+		side_action_box.add_child(make_mode_button("修补", "repair", state.defender_cp < 1))
+		side_action_box.add_child(make_mode_button("反击", "counter", state.defender_cp < 1 and state.defender_reserve < 1))
+		side_action_box.add_child(make_reserve_button())
+		side_action_box.add_child(make_end_button("结束本日"))
 
-		if defender_cp < cp_cost:
-			add_log("守方指挥点不足，无法部署。")
-			return
 
-		if defender_grain < grain_cost:
-			add_log("守方粮秣不足，无法部署。")
-			return
+func make_mode_button(text: String, action_id: String, disabled: bool) -> Button:
+	var button := make_large_button(text, disabled)
 
-		defender_cp -= cp_cost
-		defender_grain -= grain_cost
+	if selected_base_action == action_id:
+		button.add_theme_stylebox_override("normal", make_style(COLOR_BUTTON_ACTIVE, COLOR_BORDER, 2, 10))
 
-	var piece := create_piece(side, kind)
-	pieces[zone_id].append(piece)
+	button.pressed.connect(_on_action_mode_pressed.bind(action_id))
 
-	add_log("%s在%s部署了%s。" % [
-		"攻方" if side == "attacker" else "守方",
-		get_zone_name(zone_id),
-		piece["name"]
-	])
+	return button
+
+
+func make_reserve_button() -> Button:
+	var disabled := false
+
+	if state.current_side == "attacker":
+		disabled = state.attacker_cp < 1
+	else:
+		disabled = state.defender_cp < 1
+
+	var button := make_large_button("待机\n转 1 预备", disabled)
+	button.pressed.connect(_on_reserve_pressed)
+
+	return button
+
+
+func make_end_button(text: String) -> Button:
+	var button := make_large_button(text, false)
+
+	button.add_theme_stylebox_override("normal", make_style(COLOR_END_BUTTON, COLOR_BORDER, 1, 10))
+	button.add_theme_stylebox_override("hover", make_style(COLOR_END_BUTTON_HOVER, COLOR_ACCENT, 2, 10))
+	button.add_theme_stylebox_override("pressed", make_style(Color("d67d58"), COLOR_ACCENT, 2, 10))
+
+	button.pressed.connect(_on_end_pressed)
+
+	return button
+
+
+func make_large_button(text: String, disabled: bool = false) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.disabled = disabled
+	button.custom_minimum_size = Vector2(210, 60)
+
+	button.add_theme_font_size_override("font_size", FONT_BUTTON)
+
+	button.add_theme_color_override("font_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_hover_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_pressed_color", COLOR_TEXT_DARK)
+	button.add_theme_color_override("font_disabled_color", Color("505050"))
+
+	button.add_theme_stylebox_override("normal", make_style(COLOR_BUTTON, COLOR_BORDER, 1, 10))
+	button.add_theme_stylebox_override("hover", make_style(COLOR_BUTTON_HOVER, COLOR_ACCENT, 2, 10))
+	button.add_theme_stylebox_override("pressed", make_style(Color("c8d8ed"), COLOR_ACCENT, 2, 10))
+	button.add_theme_stylebox_override("disabled", make_style(Color("b8c0ca"), Color("7a8490"), 1, 10))
+
+	return button
+
+
+func _on_action_mode_pressed(action_id: String) -> void:
+	selected_card.clear()
+	pending_action.clear()
+
+	if selected_base_action == action_id:
+		selected_base_action = ""
+	else:
+		selected_base_action = action_id
 
 	refresh_ui()
 
 
-func get_zone_name(zone_id: String) -> String:
-	match zone_id:
-		"left":
-			return "左墙"
-		"gate":
-			return "主门"
-		"right":
-			return "右墙"
-		"tunnel":
-			return "地道"
-		"attacker_back":
-			return "攻方后阵"
+func _on_reserve_pressed() -> void:
+	pending_action = {
+		"type": "reserve",
+	}
+
+	confirm_dialog.dialog_text = "确认将当前阶段的 1 点指挥点转为 1 点预备点？"
+	confirm_dialog.popup_centered(Vector2i(560, 220))
+
+
+func _on_end_pressed() -> void:
+	if state.current_side == "attacker":
+		pending_action = {
+			"type": "end_attacker_phase",
+		}
+
+		confirm_dialog.dialog_text = "确认结束攻方阶段？\n结束后将进入守方阶段。"
+	else:
+		pending_action = {
+			"type": "end_day",
+		}
+
+		confirm_dialog.dialog_text = "确认结束本日？\n若存在突破标记，攻方将在结算中获胜。"
+
+	confirm_dialog.popup_centered(Vector2i(560, 240))
+
+
+# ============================================================
+# 点击战区后的确认
+# ============================================================
+
+func _on_zone_clicked(zone_id: String) -> void:
+	if selected_base_action == "" and selected_card.is_empty():
+		return
+
+	if selected_base_action != "":
+		if not is_main_zone(zone_id):
+			return
+
+		prepare_base_action_confirmation(zone_id)
+		return
+
+	if not selected_card.is_empty():
+		if not is_zone_valid_for_selected_card(zone_id):
+			add_state_log("%s不能部署到%s。" % [
+				selected_card["name"],
+				get_display_zone_name(zone_id),
+			])
+			refresh_ui()
+			return
+
+		prepare_deploy_confirmation(zone_id)
+
+
+func prepare_base_action_confirmation(zone_id: String) -> void:
+	pending_action = {
+		"type": "base_action",
+		"action": selected_base_action,
+		"zone_id": zone_id,
+	}
+
+	confirm_dialog.dialog_text = "确认执行：%s → %s？" % [
+		get_selected_action_text(),
+		get_display_zone_name(zone_id),
+	]
+
+	confirm_dialog.popup_centered(Vector2i(560, 220))
+
+
+func prepare_deploy_confirmation(zone_id: String) -> void:
+	pending_action = {
+		"type": "deploy",
+		"zone_id": zone_id,
+		"card": selected_card.duplicate(true),
+	}
+
+	confirm_dialog.dialog_text = "确认部署：%s → %s？\n费用：%s" % [
+		selected_card["name"],
+		get_display_zone_name(zone_id),
+		get_cost_text(selected_card),
+	]
+
+	confirm_dialog.popup_centered(Vector2i(560, 240))
+
+
+func _on_confirm_dialog_confirmed() -> void:
+	if pending_action.is_empty():
+		return
+
+	var action_type := String(pending_action.get("type", ""))
+
+	match action_type:
+		"base_action":
+			resolve_base_action(
+				String(pending_action["action"]),
+				String(pending_action["zone_id"])
+			)
+
+		"deploy":
+			var card: Dictionary = pending_action["card"]
+
+			SiegeRules.deploy_piece(
+				state,
+				String(pending_action["zone_id"]),
+				String(card["side"]),
+				String(card["kind"]),
+				int(card["cp_cost"]),
+				int(card["supply_cost"]),
+				int(card["grain_cost"])
+			)
+
+		"reserve":
+			SiegeRules.pass_action(state)
+
+		"end_attacker_phase":
+			SiegeRules.end_attacker_phase(state)
+
+		"end_day":
+			SiegeRules.end_day(state)
+
+	pending_action.clear()
+	selected_base_action = ""
+	selected_card.clear()
+
+	refresh_ui()
+
+
+func resolve_base_action(action_id: String, zone_id: String) -> void:
+	match action_id:
+		"assault":
+			SiegeRules.attacker_assault(state, zone_id)
+
+		"climb":
+			SiegeRules.attacker_climb(state, zone_id)
+
+		"repair":
+			SiegeRules.defender_repair(state, zone_id)
+
+		"counter":
+			SiegeRules.defender_counterattack(state, zone_id)
+
+
+func get_selected_action_text() -> String:
+	match selected_base_action:
+		"assault":
+			return "强攻"
+
+		"climb":
+			return "登城"
+
+		"repair":
+			return "修补"
+
+		"counter":
+			return "反击"
+
 		_:
-			return zone_id
+			return "无"
 
 
-func add_log(text: String) -> void:
-	log_label.append_text(text + "\n")
-	log_label.scroll_to_line(log_label.get_line_count())
+func get_display_zone_name(zone_id: String) -> String:
+	if zone_id == "shore":
+		return "岸防"
+
+	return SiegeData.get_zone_name(zone_id)
+
+
+func is_main_zone(zone_id: String) -> bool:
+	return SiegeData.MAIN_ZONES.has(zone_id)
+
+
+# ============================================================
+# 日志
+# ============================================================
+
+func refresh_log() -> void:
+	log_box.clear()
+	log_box.append_text(state.get_log_text())
+	log_box.scroll_to_line(log_box.get_line_count())
+
+
+func add_state_log(text: String) -> void:
+	if state == null:
+		return
+
+	if state.has_method("add_log"):
+		state.call("add_log", text)
+	elif state.has_method("log"):
+		state.call("log", text)
+
+
+# ============================================================
+# 布局工具函数
+# ============================================================
+
+func set_rect(node: Control, x: float, y: float, w: float, h: float) -> void:
+	node.position = Vector2(x, y)
+	node.size = Vector2(w, h)
+
+
+func make_margin_container(
+	left: int = PANEL_PADDING,
+	top: int = PANEL_PADDING,
+	right: int = PANEL_PADDING,
+	bottom: int = PANEL_PADDING
+) -> MarginContainer:
+	var margin := MarginContainer.new()
+
+	margin.add_theme_constant_override("margin_left", left)
+	margin.add_theme_constant_override("margin_top", top)
+	margin.add_theme_constant_override("margin_right", right)
+	margin.add_theme_constant_override("margin_bottom", bottom)
+
+	return margin
+
+
+func make_style(
+	bg: Color,
+	border: Color,
+	border_width: int = 1,
+	radius: int = 0
+) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+
+	style.bg_color = bg
+	style.border_color = border
+	style.set_border_width_all(border_width)
+
+	style.corner_radius_top_left = radius
+	style.corner_radius_top_right = radius
+	style.corner_radius_bottom_left = radius
+	style.corner_radius_bottom_right = radius
+
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+
+	return style
